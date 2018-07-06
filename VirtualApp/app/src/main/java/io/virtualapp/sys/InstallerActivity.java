@@ -16,16 +16,19 @@ import android.widget.Toast;
 
 import com.lody.virtual.client.core.InstallStrategy;
 import com.lody.virtual.client.core.VirtualCore;
+import com.lody.virtual.helper.utils.EncodeUtils;
 import com.lody.virtual.helper.utils.FileUtils;
 import com.lody.virtual.remote.InstalledAppInfo;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import io.virtualapp.R;
 import io.virtualapp.VCommends;
 import io.virtualapp.abs.ui.VUiKit;
+import io.virtualapp.home.models.AppData;
 import io.virtualapp.home.models.AppInfoLite;
 
 /**
@@ -110,31 +113,52 @@ public class InstallerActivity extends AppCompatActivity {
     }
 
     private void addApp(AppInfoLite appInfoLite) {
-        Installd.addApp(appInfoLite, model -> runOnUiThread(() -> {
-            if (model.isInstalling()) {
-                mProgressText.setVisibility(View.VISIBLE);
-                mProgressBar.setVisibility(View.VISIBLE);
-                mProgressText.setText(getResources().getString(R.string.add_app_installing_tips, model.getName()));
-            } else if (model.isLoading()) {
-                mProgressText.setVisibility(View.VISIBLE);
-                mProgressBar.setVisibility(View.VISIBLE);
-                mProgressText.setText(getResources().getString(R.string.add_app_loading_tips, model.getName()));
-            } else {
-                mInstallCount--;
-                if (mInstallCount <= 0) {
-                    mInstallCount = 0;
-                    // only dismiss when the app is the last to install.
-                    mProgressText.setText(getResources().getString(R.string.add_app_laoding_complete, model.getName()));
-                    mProgressText.postDelayed(() -> {
-                        mProgressBar.setVisibility(View.GONE);
+        Installd.addApp(appInfoLite, new Installd.UpdateListener() {
+            @Override
+            public void update(AppData model) {
+                runOnUiThread(() -> {
+                            if (model.isInstalling()) {
+                                mProgressText.setVisibility(View.VISIBLE);
+                                mProgressBar.setVisibility(View.VISIBLE);
+                                mProgressText.setText(getResources().getString(R.string.add_app_installing_tips, model.getName()));
+                            } else if (model.isLoading()) {
+                                mProgressText.setVisibility(View.VISIBLE);
+                                mProgressBar.setVisibility(View.VISIBLE);
+                                mProgressText.setText(getResources().getString(R.string.add_app_loading_tips, model.getName()));
+                            } else {
+                                mInstallCount--;
+                                if (mInstallCount <= 0) {
+                                    mInstallCount = 0;
+                                    // only dismiss when the app is the last to install.
+                                    mProgressText.setText(getResources().getString(R.string.add_app_loading_complete, model.getName()));
+                                    mProgressText.postDelayed(() -> {
+                                        mProgressBar.setVisibility(View.GONE);
 
-                        mRight.setVisibility(View.VISIBLE);
-                        mRight.setText(R.string.install_complete);
-                        mRight.setOnClickListener((vv)-> finish());
-                    }, 500);
-                }
+                                        mRight.setVisibility(View.VISIBLE);
+                                        mRight.setText(R.string.install_complete);
+                                        mRight.setOnClickListener((vv) -> finish());
+                                    }, 500);
+                                }
+                            }
+                        }
+                );
             }
-        }));
+
+            @Override
+            public void fail(String msg) {
+                if (msg == null) {
+                    msg = "Unknown";
+                }
+
+                mProgressText.setText(getResources().getString(R.string.install_fail, msg));
+                mProgressText.postDelayed(() -> {
+                    mProgressBar.setVisibility(View.GONE);
+                    mRight.setVisibility(View.VISIBLE);
+                    mRight.setText(R.string.install_complete);
+                    mRight.setOnClickListener((vv) -> finish());
+                }, 500);
+            }
+        });
     }
 
     private boolean dealUpdate(List<AppInfoLite> appList) {
@@ -145,6 +169,15 @@ public class InstallerActivity extends AppCompatActivity {
         if (appInfoLite == null) {
             return false;
         }
+
+        List<String> magicApps = Arrays.asList(EncodeUtils.decode("Y29tLmxiZS5wYXJhbGxlbA=="), // com.lbe.parallel
+                EncodeUtils.decode("Y29tLnFpaG9vLm1hZ2lj"), // com.qihoo.magic
+                EncodeUtils.decode("Y29tLmRvdWJsZW9wZW4=")); // com.doubleopen
+
+        if (magicApps.contains(appInfoLite.packageName)) {
+            Toast.makeText(VirtualCore.get().getContext(), R.string.install_self_eggs, Toast.LENGTH_SHORT).show();
+        }
+
         if (appInfoLite.disableMultiVersion) {
             return false;
         }
@@ -193,7 +226,13 @@ public class InstallerActivity extends AppCompatActivity {
     private void handleSystemIntent(Intent intent) {
 
         Context context = VirtualCore.get().getContext();
-        String path = FileUtils.getFileFromUri(context, intent.getData());
+        String path;
+        try {
+            path = FileUtils.getFileFromUri(context, intent.getData());
+        } catch (Throwable e) {
+            e.printStackTrace();
+            return;
+        }
         PackageInfo pkgInfo = null;
         try {
             pkgInfo = context.getPackageManager().getPackageArchiveInfo(path, PackageManager.GET_META_DATA);
@@ -222,22 +261,27 @@ public class InstallerActivity extends AppCompatActivity {
             return;
         }
         PackageInfo packageArchiveInfo = packageManager.getPackageArchiveInfo(path, 0);
+        if (packageArchiveInfo == null) {
+            finish();
+            return;
+        }
         String toInstalledVersion = packageArchiveInfo.versionName;
         int toInstalledVersionCode = packageArchiveInfo.versionCode;
-        CharSequence label;
-        try {
-            label = packageArchiveInfo.applicationInfo.loadLabel(packageManager);
-        } catch (Throwable e) {
-            label = packageArchiveInfo.packageName;
-        }
+        CharSequence label = packageArchiveInfo.packageName;
 
         if (installedAppInfo != null) {
             String currentVersion;
             int currentVersionCode;
 
             PackageInfo applicationInfo = installedAppInfo.getPackageInfo(0);
+            if (applicationInfo == null) {
+                finish();
+                return;
+            }
             currentVersion = applicationInfo.versionName;
             currentVersionCode = applicationInfo.versionCode;
+
+            label = applicationInfo.applicationInfo.loadLabel(packageManager);
 
             String multiVersionUpdate = getResources().getString(currentVersionCode == toInstalledVersionCode ? R.string.multi_version_cover : (
                     currentVersionCode < toInstalledVersionCode ? R.string.multi_version_upgrade : R.string.multi_version_downgrade
@@ -251,6 +295,7 @@ public class InstallerActivity extends AppCompatActivity {
             rightString = getResources().getString(R.string.install);
         }
 
+        final CharSequence apkName = label;
         mTips.setText(tipsText);
         mLeft.setText(leftString);
         mRight.setText(rightString);
@@ -268,13 +313,20 @@ public class InstallerActivity extends AppCompatActivity {
             }).done((res) -> {
                 // install success
                 mTips.setVisibility(View.GONE);
+                mProgressText.setVisibility(View.VISIBLE);
+                mProgressText.setText(getResources().getString(R.string.add_app_loading_complete, apkName));
                 mProgressBar.setVisibility(View.GONE);
                 mRight.setEnabled(true);
-                mRight.setText(res.isSuccess ? R.string.install_complete : R.string.install_fail);
+                mRight.setText(res.isSuccess ? getResources().getString(R.string.install_complete) :
+                        getResources().getString(R.string.install_fail, res.error));
                 mRight.setOnClickListener((vv) -> finish());
             }).fail((res) -> {
-                mTips.setVisibility(View.VISIBLE);
-                mTips.setText(R.string.install_fail);
+                String msg = res.getMessage();
+                if (msg == null) {
+                    msg = "Unknown";
+                }
+                mProgressText.setVisibility(View.VISIBLE);
+                mProgressText.setText(getResources().getString(R.string.install_fail, msg));
                 mRight.setEnabled(true);
                 mProgressBar.setVisibility(View.GONE);
                 mRight.setText(android.R.string.ok);

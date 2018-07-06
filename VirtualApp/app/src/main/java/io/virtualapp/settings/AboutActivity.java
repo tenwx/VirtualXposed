@@ -2,8 +2,10 @@ package io.virtualapp.settings;
 
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AlertDialog;
@@ -23,23 +25,27 @@ import mehdi.sakout.aboutpage.Element;
  * author: weishu on 18/1/12.
  */
 public class AboutActivity extends VActivity {
+
+    private AboutPage mPage;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        AboutPage page = new AboutPage(this)
+        mPage = new AboutPage(this)
                 .isRTL(false)
                 .setImage(R.mipmap.ic_launcher)
+                .addItem(getCopyRightsElement())
                 .addItem(getVersionElement())
                 .addItem(getCheckUpdateElement())
-                .addItem(getFeedbackElement())
-                .addItem(getFeedbackWechatElement())
+                .addItem(getFeedbackEmailElement())
                 .addItem(getThanksElement())
-                .addEmail("va1xposed@gmail.com")
-                .addWebsite("http://vxposed.com")
-                .addGitHub("tiann")
-                .addItem(getCopyRightsElement());
-        View aboutPage = page.create();
+                .addItem(getFeedbacTelegramElement())
+                .addItem(getWebsiteElement())
+                .addGitHub("tiann");
+
+        View aboutPage = mPage.create();
+
         setContentView(aboutPage);
     }
 
@@ -47,12 +53,7 @@ public class AboutActivity extends VActivity {
         Element copyRightsElement = new Element();
         final String copyrights = String.format(getString(R.string.copy_right), Calendar.getInstance().get(Calendar.YEAR));
         copyRightsElement.setTitle(copyrights);
-        copyRightsElement.setIconDrawable(R.drawable.about_icon_copy_right);
-        copyRightsElement.setIconTint(mehdi.sakout.aboutpage.R.color.about_item_icon_color);
-        copyRightsElement.setIconNightTint(android.R.color.white);
-        copyRightsElement.setGravity(Gravity.CENTER);
-        copyRightsElement.setOnClickListener(v ->
-                Toast.makeText(v.getContext(), copyrights, Toast.LENGTH_SHORT).show());
+        copyRightsElement.setGravity(Gravity.START);
         return copyRightsElement;
     }
 
@@ -65,13 +66,22 @@ public class AboutActivity extends VActivity {
         } catch (PackageManager.NameNotFoundException ignored) {
         }
         version.setTitle(getResources().getString(R.string.about_version_title, versionName));
+
+        final int[] clickCount = {0};
+        version.setOnClickListener(v -> {
+            clickCount[0]++;
+            if (clickCount[0] == 3) {
+                mPage.addItem(getFeedbackQQElement());
+                mPage.addItem(getFeedbackWechatElement());
+            }
+        });
         return version;
     }
 
-    Element getFeedbackElement() {
+    Element getFeedbackQQElement() {
         Element feedback = new Element();
         final String qqGroup = "597478474";
-        feedback.setTitle(getResources().getString(R.string.about_feedback_title, qqGroup));
+        feedback.setTitle(getResources().getString(R.string.about_feedback_qq_title));
 
         feedback.setOnClickListener(v -> {
             ClipboardManager clipboardManager = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
@@ -83,17 +93,64 @@ public class AboutActivity extends VActivity {
         return feedback;
     }
 
+    Element getFeedbackEmailElement() {
+        Element emailElement = new Element();
+        final String email = "virtualxposed@gmail.com";
+        String title = getResources().getString(R.string.about_feedback_title);
+        emailElement.setTitle(title);
+
+        Uri uri = Uri.parse("mailto:" + email);
+        Intent intent = new Intent(Intent.ACTION_SENDTO, uri);
+        intent.putExtra(Intent.EXTRA_SUBJECT, title); // 主题
+
+        String hint = getResources().getString(R.string.about_feedback_hint);
+        intent.putExtra(Intent.EXTRA_TEXT, hint);
+        emailElement.setIntent(intent);
+        return emailElement;
+    }
+
     Element getFeedbackWechatElement() {
         Element feedback = new Element();
-        final String weChatGroup = "CSYJZF";
-        feedback.setTitle(getResources().getString(R.string.about_feedback_wechat_title, weChatGroup));
+        // final String weChatGroup = "CSYJZF";
+        feedback.setTitle(getResources().getString(R.string.about_feedback_wechat_title));
 
         feedback.setOnClickListener(v -> {
             ClipboardManager clipboardManager = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             if (clipboardManager != null) {
-                clipboardManager.setPrimaryClip(ClipData.newPlainText(null, weChatGroup));
+                clipboardManager.setPrimaryClip(ClipData.newPlainText(null, "VirtualXposed"));
             }
             Toast.makeText(v.getContext(), getResources().getString(R.string.about_feedback_tips), Toast.LENGTH_SHORT).show();
+        });
+        return feedback;
+    }
+
+    Element getFeedbacTelegramElement() {
+        Element feedback = new Element();
+        final String weChatGroup = "VirtualXposed";
+        feedback.setTitle(getResources().getString(R.string.about_feedback_tel_title, weChatGroup));
+
+        feedback.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setData(Uri.parse("https://t.me/joinchat/Gtti8Usj1JD4TchHQmy-ew"));
+            try {
+                startActivity(intent);
+            } catch (Throwable ignored) {
+            }
+        });
+        return feedback;
+    }
+
+    Element getWebsiteElement() {
+        Element feedback = new Element();
+        feedback.setTitle(getResources().getString(R.string.about_website_title));
+
+        feedback.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setData(Uri.parse("http://vxposed.com"));
+            try {
+                startActivity(intent);
+            } catch (Throwable ignored) {
+            }
         });
         return feedback;
     }

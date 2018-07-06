@@ -1,11 +1,18 @@
 apply plugin: 'com.android.library'
 
+Properties properties = new Properties()
+def localProp = file(project.rootProject.file('local.properties'))
+if (localProp.exists()) {
+    properties.load(localProp.newDataInputStream())
+}
+def exposedVersion = properties.getProperty("exposed.version") ?: "0.3.5"
+
 android {
     compileSdkVersion 26
     buildToolsVersion '26.0.2'
 
     defaultConfig {
-        minSdkVersion 14
+        minSdkVersion 21
         targetSdkVersion 22
         versionCode 1
         versionName "1.0"
@@ -39,8 +46,7 @@ android {
 
 dependencies {
     compile fileTree(include: ['*.jar'], dir: 'libs')
-//    compile 'com.github.android-hacker:exposed:0.3.6'
-    compile 'me.weishu.exposed:exposed-core:0.5.4'
+    compile "me.weishu.exposed:exposed-core:${exposedVersion}"
 }
 
 repositories {
